@@ -1,27 +1,9 @@
-# OpenAQ Hourly Fetch Workflow
+OpenAQ-AWS Athena获取教程
+========================================
 
-This directory contains a Jupyter notebook that automates downloading hourly PM2.5 and ozone concentrations from the OpenAQ v3 API for any set of countries.
-
-## Notebook
-- `openaq_hourly_fetch.ipynb` – main workflow. The first cell exposes configuration knobs and the second cell implements the data collection pipeline.
-
-## Prerequisites
-- Python 3.10 or newer with the packages `pandas`, `requests`, `tqdm`, and `openaq` installed.
-- An OpenAQ v3 API key stored in the environment variable `OPENAQ_API_KEY` before launching the notebook session. The key is never written to disk inside the notebook.
-- A CSV file containing the list of countries or regions you want to process.
-
-## Configuration Highlights
-- `COUNTRY_CSV_PATH` points to the CSV file with country metadata.
-- `COUNTRY_CSV_COLUMNS` maps the required logical column names (`country_name`, `iso3`, and optionally `fasst_region`) to the actual column headers in your CSV. Set an entry to `None` if the column doesn’t exist.
-- Use `INCLUDE_COUNTRIES` or `EXCLUDE_COUNTRIES` to scope the run using ISO2, ISO3, or country names.
-- Adjust the `DATETIME_FROM` and `DATETIME_TO` window as needed; timestamps are interpreted in UTC.
-
-## Running the Notebook
-1. Open the notebook in JupyterLab, VS Code, or any compatible environment.
-2. Edit the configuration cell to match your CSV path and column names.
-3. Run the configuration cell followed by the implementation cell; finally call `main()` if it is not executed automatically.
-4. Output files are written to the `output/` subdirectory next to the notebook, with separate CSV files per country and pollutant.
-
-## Tips
-- If you work behind a corporate proxy, set `DISABLE_ENV_PROXIES = False` in the configuration cell so that the environment proxy variables remain active.
-- Hourly downloads are chunked and include retry logic tuned for the OpenAQ rate limits. You can relax or tighten these values in the configuration section.
+1. 创建 S3 存储桶：在 AWS 控制台搜索 “S3”，创建用于存储结果的 Bucket；地区与账号一致，建议 us-east-1（OpenAQ 数据所在区）。
+2. 创建数据库：在 Athena 控制台执行 `CREATE DATABASE IF NOT EXISTS openaq_db;`，用于保存元数据和查询历史。
+3. 建立分区表并全量扫描：按官方教程创建分区表，对全量 OpenAQ 数据做一次扫描以降低后续查询成本（示例耗时约 4.5 小时）。
+4. 创建结果表：在 S3 Bucket 下建一个结果表（如 `daily_aq_stats`）存放后续计算结果。
+5. SQL 计算指标（核心）：在 Athena 直接计算并写入结果表，避免下载原始数据。常用指标包括 PM2.5 日均 (`pm25_daily_avg`)、臭氧 MDA8（每日最大 8 小时平均，`o3_mda8`）、臭氧日最大 1 小时 (`o3_max_1h`)。每年查询耗时约 5–8 分钟。
+6. 导出 CSV：用 SQL 查询结果表并导出 CSV，单年下载约 5–10 秒。
